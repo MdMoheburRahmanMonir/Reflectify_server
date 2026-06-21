@@ -41,9 +41,6 @@ async function run() {
 		})
 
 
-
-
-
 		// Subscription update route
 		app.post('/api/subscription/update/:id', async (req, res) => {
 			try {
@@ -67,6 +64,57 @@ async function run() {
 		})
 
 
+
+
+
+		// Admin mutation for  client get user
+		app.get('/api/admin/dashboard/get-user/:id', async (req, res) => {
+			try {
+				const id = req.params.id;
+				const user = await usersCollection.findOne({
+					_id: new ObjectId(id)
+				})
+				if (!user) {
+					return res.status(403).send({ error: "Unauthorized status code" })
+				}
+				const userData = await usersCollection.find({}).toArray();
+				res.send(userData)
+
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Admin mutation for  client delete User 
+		app.delete('/api/admin/dashboard/delete-user/:id', async (req, res) => {
+			try {
+				const id = req.params.id;
+
+				const userData = await usersCollection.deleteOne({ _id: new ObjectId(id) });
+				res.send(userData)
+
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Admin mutation for  client Update user
+		app.patch('/api/admin/dashboard/update-user/:id', async (req, res) => {
+			try {
+				const id = req.params.id;
+				const bodyData = req.body.role;
+				console.log(bodyData);
+				
+				const userData = await usersCollection.updateOne({ _id: new ObjectId(id) }, { $set: { role: bodyData } });
+				res.send(userData)
+
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
 
 
 
