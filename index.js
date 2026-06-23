@@ -24,7 +24,7 @@ const client = new MongoClient(MONGODB_URI, {
 async function run() {
 	try {
 		// Connect the client to the server	(optional starting in v4.7)
-		await client.connect();
+		// await client.connect();
 
 		const dbjobs = client.db('jobsdb');
 		const collection = dbjobs.collection('jobs')
@@ -40,6 +40,11 @@ async function run() {
 			res.send(jobsData);
 		})
 
+
+
+
+
+		// Subscription
 
 		// Subscription update route
 		app.post('/api/subscription/update/:id', async (req, res) => {
@@ -67,7 +72,68 @@ async function run() {
 
 
 
-		// Admin mutation for  client get user
+
+
+		// Home
+
+		// Admin get data for user  get Operation  (Manage User)
+		app.get('/api/public/lesson', async (req, res) => {
+			try {
+
+
+				const data = await addLessonCollection.find({ status: 'approved', privacy: 'public', anyoneCanSee: true }).toArray()
+				res.send(data);
+
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+
+
+
+
+		// LessonDetails
+
+		// Lesson Details Page Api 
+		app.get('/api/lesson/details/:id', async (req, res) => {
+			try {
+				const id = req.params.id;
+				const BrowserData = req.headers["session"]
+				const session = JSON.parse(BrowserData)
+				console.log(session.user.role);
+				if (!session?.user) {
+					return res.send("UnAuthorize access")					
+				}
+
+				 
+
+
+				const data = await addLessonCollection.findOne({_id: new ObjectId(id)}) 
+				res.send(data);
+
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+
+
+
+
+
+
+
+
+
+
+
+
+		// Admin
+
+		// Admin get data for user  get Operation  (Manage User)
 		app.get('/api/admin/dashboard/get-user/:id', async (req, res) => {
 			try {
 				const id = req.params.id;
@@ -86,7 +152,7 @@ async function run() {
 			}
 		})
 
-		// Admin mutation for  client delete User 
+		// Admin Crud Operation for user data DELETE Operation (Manage User)
 		app.delete('/api/admin/dashboard/delete-user/:id', async (req, res) => {
 			try {
 				const id = req.params.id;
@@ -100,16 +166,112 @@ async function run() {
 			}
 		})
 
-		// Admin mutation for  client Update user
-		app.patch('/api/admin/dashboard/update-user/:id', async (req, res) => {
+		// Admin Crud Operation for user data UPDATE Operation role (Manage User)
+		app.patch('/api/admin/dashboard/update-user-role/:id', async (req, res) => {
 			try {
 				const id = req.params.id;
 				const bodyData = req.body.role;
-				console.log(bodyData);
-				
+				const myIdFromCLient = req.body.myId;
+				const user = await usersCollection.findOne({ _id: new ObjectId(myIdFromCLient) })
+
+				if (user.role === 'user' || user._id.toString() === id) {
+					return res.send("You can't change your role")
+				}
 				const userData = await usersCollection.updateOne({ _id: new ObjectId(id) }, { $set: { role: bodyData } });
 				res.send(userData)
 
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Admin Crud Operation for user data UPDATE Operation plan (Manage User)
+		app.patch('/api/admin/dashboard/update-user-plan/:id', async (req, res) => {
+			try {
+				const id = req.params.id;
+				const bodyData = req.body.plan;
+				const myIdFromCLient = req.body.myId;
+				const user = await usersCollection.findOne({ _id: new ObjectId(myIdFromCLient) })
+
+				if (user.role === 'user') {
+					return res.send("You can't change your role")
+				}
+				const userData = await usersCollection.updateOne({ _id: new ObjectId(id) }, { $set: { plan: bodyData } });
+				res.send(userData)
+
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+
+		// Admin Crud Operation for user data UPDATE Operation plan (Manage Lesson)
+		app.get('/api/admin/dashboard/get-lesson', async (req, res) => {
+			try {
+				const userData = await addLessonCollection.find({}).toArray();
+				res.send(userData)
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Admin Crud Operation for user data DELETE Operation plan (Manage Lesson)
+		app.delete('/api/admin/dashboard/delete-lesson/:id', async (req, res) => {
+			try {
+				const id = req.params.id;
+				const role = req.body.role;
+				if (role === 'user') {
+					return res.send('You are Normal User')
+				}
+				const userData = await addLessonCollection.deleteOne({ _id: new ObjectId(id) });
+				res.send(userData)
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Admin Crud Operation for user data UPDATE Operation plan (Manage Lesson) (Privacy update, post can public or private by admin)
+		app.patch('/api/admin/dashboard/status-public-or-private-lesson/:id', async (req, res) => {
+			try {
+				const id = req.params.id;
+				const statusValue = req.body.anyoneCanSee;
+				console.log(typeof statusValue);
+
+				const userData = await addLessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { anyoneCanSee: statusValue } });
+				res.send(userData)
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+		// Admin Crud Operation for user data UPDATE Operation plan (Manage Lesson) (Status Update how permit post active)
+		app.patch('/api/admin/dashboard/status-update/:id', async (req, res) => {
+			try {
+				const id = req.params.id;
+				const statusValue = req.body.status;
+				console.log(typeof statusValue);
+
+				const userData = await addLessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: statusValue } });
+				res.send(userData)
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Admin Crud Operation for user data UPDATE Operation plan (Manage Lesson) (admin view or not)
+		app.patch('/api/admin/dashboard/admin-view/:id', async (req, res) => {
+			try {
+				const id = req.params.id;
+				const isView = req.body.isViewAdmin;
+				console.log(typeof isView);
+
+				const userData = await addLessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { isViewAdmin: isView } });
+				res.send(userData)
 			} catch (error) {
 				console.error(error);
 				return res.status(500).send({ error: "Server error" });
@@ -123,23 +285,21 @@ async function run() {
 
 
 
+
+
+		// user
+
 		// User Add Lessons route api
 		app.post('/api/user/dashboard/add-lesson/:id', async (req, res) => {
 			try {
 				const id = req.params.id;
 				const data = req.body
 				data.createdTime = new Date();
-				const user = await usersCollection.findOne({
-					_id: new ObjectId(id)
-				})
+				const user = await usersCollection.findOne({ _id: new ObjectId(id) })
 
 				if (!user) {
 					return res.status(403).send({ error: "Unauthorized status code" })
 				}
-				if (user.plan !== req.body.accessLevel) {
-					return res.status(403).send({ error: "Your Plan is free" })
-				}
-
 				const lesson = await addLessonCollection.insertOne(data)
 				res.send(lesson)
 			} catch (error) {
@@ -212,7 +372,7 @@ async function run() {
 
 			} catch (error) {
 				console.error(error);
-				return res.status(500).send({ error: "Server error" });
+				return res.status(500).send({ error: "Server error." });
 			}
 		})
 
@@ -236,7 +396,7 @@ async function run() {
 			res.send('You are searching invalid route.')
 		})
 		// Send a ping to confirm a successful connection
-		await client.db("admin").command({ ping: 1 });
+		// await client.db("admin").command({ ping: 1 });
 		console.log("Pinged your deployment. You successfully connected to MongoDB!");
 	} finally {
 		// Ensures that the client will close when you finish/error
