@@ -32,6 +32,7 @@ async function run() {
 		const usersCollection = db.collection('user');
 		const subscriptionCollection = db.collection('subscription');
 		const addLessonCollection = db.collection('add_lesson');
+		const reportCollection = db.collection('report');
 
 
 		// Other Collection Data for showing purpose 
@@ -78,12 +79,86 @@ async function run() {
 
 		// Admin get data for user  get Operation  (Manage User)
 		app.get('/api/public/lesson', async (req, res) => {
-			try {
-
-
+			try { 
 				const data = await addLessonCollection.find({ status: 'approved', privacy: 'public', anyoneCanSee: true }).toArray()
 				res.send(data);
 
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Like Increment Decrement 👍
+		app.patch('/api/like/increment-decrement', async (req, res) => {
+			try {
+				const { isLike, lessonId, likerId } = req.body;
+				if (!lessonId || !likerId) {
+					return res.send({ error: "Invalid request, You are trying without login" });
+				}
+				const id = new ObjectId(lessonId);
+				const lesson = await addLessonCollection.findOne({ _id: id })
+				if (!lesson) {
+					return res.send('Data not exist.')
+				}
+				if (isLike) {
+					const result = await addLessonCollection.updateOne({ _id: id }, { $addToSet: { likes: likerId }, $inc: { likeCount: 1 } })
+					res.send(result)
+				} else {
+					const result = await addLessonCollection.updateOne({ _id: id }, { $pull: { likes: likerId }, $inc: { likeCount: -1 } });
+					res.send(result)
+				}
+				res.send('No action found')
+
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Saved Increment Decrement 🔖
+		app.patch('/api/like/saved-unsaved', async (req, res) => {
+			try {
+				const { isSaved, lessonId, saverId } = req.body;
+				if (!lessonId || !saverId) {
+					return res.send({ error: "Invalid request, You are trying without login" });
+				}
+				const id = new ObjectId(lessonId);
+				const lesson = await addLessonCollection.findOne({ _id: id })
+				if (!lesson) {
+					return res.send('Data not exist.')
+				}
+				if (isSaved) {
+					const result = await addLessonCollection.updateOne({ _id: id }, { $addToSet: { savedLesson: saverId }, $inc: { savedCount: 1 } })
+					res.send(result)
+				} else {
+					const result = await addLessonCollection.updateOne({ _id: id }, { $pull: { savedLesson: saverId }, $inc: { savedCount: -1 } });
+					res.send(result)
+				}
+				res.send('No action found')
+
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Report Post Api ®️
+		app.post('/api/report/post', async (req, res) => {
+			try {
+				const { reporterId, reporterEmail, lessonId, reportImage, reportDetails, reportReason } = req.body
+
+				const user = await usersCollection.findOne({ _id: new ObjectId(reporterId) })
+				const lessonCollection = await addLessonCollection.findOne({ _id: new ObjectId(lessonId) })
+				if (!user) {
+					return res.status(403).send({ error: "Unauthorized status code" })
+				}
+				if (!lessonCollection) {
+					return res.status(403).send({ error: "Unauthorized status code" })
+				}
+
+				const data = await reportCollection.insertOne(req.body);
+				res.send(data)
 			} catch (error) {
 				console.error(error);
 				return res.status(500).send({ error: "Server error" });
@@ -94,7 +169,17 @@ async function run() {
 
 
 
-		// LessonDetails
+
+
+
+
+
+
+
+
+
+
+		// LessonDetails : Dynamic Page [id]
 
 		// Lesson Details Page Api 
 		app.get('/api/lesson/details/:id', async (req, res) => {
@@ -104,13 +189,13 @@ async function run() {
 				const session = JSON.parse(BrowserData)
 				console.log(session.user.role);
 				if (!session?.user) {
-					return res.send("UnAuthorize access")					
+					return res.send("UnAuthorize access")
 				}
 
-				 
 
 
-				const data = await addLessonCollection.findOne({_id: new ObjectId(id)}) 
+
+				const data = await addLessonCollection.findOne({ _id: new ObjectId(id) })
 				res.send(data);
 
 			} catch (error) {
@@ -278,6 +363,95 @@ async function run() {
 			}
 		})
 
+		// Get Report For admin ®️
+		app.get('/api/admin/dashboard/get-report', async (req, res) => {
+			try {
+				const session = req.headers["session"];
+				const userSession = JSON.parse(session)
+				if (userSession?.user?.role !== 'admin') {
+					return res.status(403).send({ error: "Unauthorized status code" })
+				}
+				// const { lessonId } = req.query;
+				const data = await reportCollection.aggregate([
+					{
+						$group: {
+							_id: "$lessonId",
+							lessonTitle: { $first: "$lessonTitle" },
+							count: { $sum: 1 }
+						}
+					},
+					{
+						$project: {
+							_id: 0,
+							lessonId: "$_id",
+							lessonTitle: 1,
+							count: 1
+						}
+					}
+				]).toArray();
+				res.send(data)
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Get Report details For admin 
+		app.get('/api/get-all-report-by-lesson-id/:id', async (req, res) => {
+			try {
+				const { id } = req.params;
+				const data = await reportCollection.find({ lessonId: id }).toArray()
+				res.send(data)
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Report and lesson both delete. (Manage Lesson)
+		app.delete('/api/delete-full-report/:id', async (req, res) => {
+			try {
+				const { id } = req.params;
+				const role = req.body.role;
+				if (role !== 'admin') {
+					return res.send('You are Normal User')
+				}
+				const reportDelete = await reportCollection.deleteMany({ lessonId: id });
+				const lessonDelete = await addLessonCollection.deleteOne({ _id: new ObjectId(id) })
+				res.send({ reportDelete, lessonDelete })
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+		// Only Report delete. (Manage Lesson)
+		app.delete('/api/delete-report-only/:id', async (req, res) => {
+			try {
+				const { id } = req.params;
+				const role = req.body.role;
+				if (role !== 'admin') {
+					return res.send('You are Normal User')
+				}
+				const reportDelete = await reportCollection.deleteMany({ lessonId: id });
+				res.send(reportDelete)
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -376,6 +550,30 @@ async function run() {
 			}
 		})
 
+		// My Favorite lesson for show
+		app.get('/api/user/dashboard/my-favorite-lesson/:id', async (req, res) => {
+			try {
+				const { id } = req.params;
+				const data = await addLessonCollection.find({
+					savedLesson: id
+				}).toArray()
+				console.log(data);
+				res.send(data)
+				
+				// if (!data) {
+				// 	return res.status(403).send({ error: "Unauthorized status code" })
+				// }
+
+				// const lessons = await addLessonCollection
+				// 	.find({ userId: id })
+				// 	.toArray();
+
+				// res.send(lessons)
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
 
 
 
