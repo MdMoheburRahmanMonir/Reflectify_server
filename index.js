@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const { createRemoteJWKSet, jwtVerify } = require('jose-cjs');
 require('dotenv').config();
 
 const app = express();
@@ -20,6 +21,32 @@ const client = new MongoClient(MONGODB_URI, {
 		deprecationErrors: true,
 	}
 });
+
+const JWKS = createRemoteJWKSet(
+	new URL(`http://localhost:3000/api/auth/jwks`)
+)
+const verifyUser = async (req, res, next) => {
+
+	const userToken = req?.headers?.token;
+	if (!userToken) {
+		return res.status(401).send({ error: "Unauthorized status code" });
+	}
+	const token = userToken.split(" ")[1];
+	if (!token) {
+		return res.status(401).send({ error: "Unauthorized status code" });
+	}
+	console.log(userToken, token);
+	try {
+		const { payload } = await jwtVerify(token, JWKS) 
+		console.log(payload.role); //This is true
+		next()
+		
+	} catch (error) {
+		console.log(error);
+		res.send({ error: "Unauthorized status code" })	
+	}
+}
+
 
 async function run() {
 	try {
@@ -245,7 +272,6 @@ async function run() {
 				const id = req.params.id;
 				const BrowserData = req.headers["session"]
 				const session = JSON.parse(BrowserData)
-				console.log(session.user.role);
 				if (!session?.user) {
 					return res.send("UnAuthorize access")
 				}
@@ -378,7 +404,6 @@ async function run() {
 			try {
 				const id = req.params.id;
 				const statusValue = req.body.anyoneCanSee;
-				console.log(typeof statusValue);
 
 				const userData = await lessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { anyoneCanSee: statusValue } });
 				res.send(userData)
@@ -392,7 +417,6 @@ async function run() {
 			try {
 				const id = req.params.id;
 				const statusValue = req.body.status;
-				console.log(typeof statusValue);
 
 				const userData = await lessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: statusValue } });
 				res.send(userData)
@@ -407,7 +431,6 @@ async function run() {
 			try {
 				const id = req.params.id;
 				const isView = req.body.isViewAdmin;
-				console.log(typeof isView);
 
 				const userData = await lessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { isViewAdmin: isView } });
 				res.send(userData)
@@ -496,10 +519,13 @@ async function run() {
 
 
 		// Total user, Total Public lesson, Total Report, Today new lesson
-		app.get('/api/admin/dashboard/user-activity', async (req, res) => {
+		app.get('/api/admin/dashboard/user-activity', verifyUser, async (req, res) => {
 			try {
-				const session = req.headers["session"];
+				const session = req.headers.sessions;
 				const userSession = JSON.parse(session)
+
+
+
 				if (userSession?.user?.role !== 'admin') {
 					return res.status(403).send({ error: "Unauthorized status code" })
 				}
@@ -692,9 +718,6 @@ async function run() {
 					res.status(403).send({ error: "Something wrong with your Data!" })
 				}
 				const isMatchUserId = await usersCollection.findOne({ _id: new ObjectId(bodyData.userId) })
-				if (isMatchUserId) {
-					console.log('User true');
-				}
 				const data = await lessonCollection.deleteOne({ _id: new ObjectId(id) })
 				res.send(data)
 			} catch (error) {
@@ -714,10 +737,6 @@ async function run() {
 					res.status(403).send({ error: "Something wrong with your Data!" })
 				}
 				const isMatchUserId = await usersCollection.findOne({ _id: new ObjectId(bodyData.userId) })
-				if (isMatchUserId) {
-					console.log('User true');
-				}
-
 				const data = await lessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: bodyData })
 				res.send(data)
 
@@ -735,7 +754,6 @@ async function run() {
 				const data = await lessonCollection.find({
 					savedLesson: id
 				}).toArray()
-				console.log(data);
 				res.send(data)
 			} catch (error) {
 				console.error(error);
