@@ -80,8 +80,52 @@ async function run() {
 		// Admin get data for user  get Operation  (Manage User)
 		app.get('/api/public/lesson', async (req, res) => {
 			try {
-				const data = await lessonCollection.find({ status: 'approved', privacy: 'public', anyoneCanSee: true }).toArray()
-				res.send(data);
+
+				const [
+					featuredLessonsSeed,
+					MostSaveLesson,
+					TopContributors,
+				] = await Promise.all([
+					lessonCollection.find({ status: 'approved', privacy: 'public', anyoneCanSee: true }).limit(6).toArray(),
+					lessonCollection.aggregate([
+						{
+							$addFields: {
+								savedLessonCount: {
+									$size: { $ifNull: ["$savedLesson", []] }
+								}
+							}
+						},
+						{
+							$sort: { savedLessonCount: -1 }
+						},
+						{
+							$limit: 3
+						}
+					]).toArray(),
+					lessonCollection.aggregate([
+						{
+							$group: {
+								_id: "$userId",
+								userName: { $first: "$userName" },
+								category: { $first: "$category" },
+								userImage: { $first: "$userImage" },
+								lessonCount: { $sum: 1 }
+							}
+						},
+						{
+							$sort: { lessonCount: -1 }
+						},
+						{
+							$limit: 5
+						}
+					]).toArray(),
+				])
+
+				res.send({
+					featuredLessonsSeed,
+					MostSaveLesson,
+					TopContributors
+				});
 
 			} catch (error) {
 				console.error(error);
@@ -302,7 +346,6 @@ async function run() {
 			}
 		})
 
-
 		// Admin Crud Operation for user data UPDATE Operation plan (Manage Lesson)
 		app.get('/api/admin/dashboard/get-lesson', async (req, res) => {
 			try {
@@ -455,12 +498,11 @@ async function run() {
 		// Total user, Total Public lesson, Total Report, Today new lesson
 		app.get('/api/admin/dashboard/user-activity', async (req, res) => {
 			try {
-				// const session = req.headers["session"];
-				// const userSession = JSON.parse(session)
-				// if (userSession?.user?.role !== 'admin') {
-				// 	return res.status(403).send({ error: "Unauthorized status code" })
-				// }
-
+				const session = req.headers["session"];
+				const userSession = JSON.parse(session)
+				if (userSession?.user?.role !== 'admin') {
+					return res.status(403).send({ error: "Unauthorized status code" })
+				}
 
 				const startOfToday = new Date();
 				startOfToday.setHours(0, 0, 0, 0);
@@ -700,6 +742,105 @@ async function run() {
 				return res.status(500).send({ error: "Server error" });
 			}
 		})
+
+		// Dashboard All summary api
+		app.get('/api/user/dashboard/all-summary/:id', async (req, res) => {
+			try {
+				const { id } = req.params;
+				const user = await usersCollection.findOne({ _id: new ObjectId(id) })
+				if (!user) {
+					return res.status(403).send({ error: "Unauthorized status code" })
+				}
+				const startOfToday = new Date();
+				const [Average, totalLessonCreated, TotalSavedLesson, RecentlyAddedLesson, PublicLike, topContributors] = await Promise.all([
+					lessonCollection.aggregate([
+						{
+							$match: {
+								userId: id,
+								createdTime: {
+									$gte: new Date(
+										Date.now() - 7 * 24 * 60 * 60 * 1000
+									)
+								}
+							}
+						},
+						{
+							$group: {
+								_id: {
+									$dayOfWeek: "$createdTime"
+								},
+								createdLessons: { $sum: 1 }
+							}
+						},
+						{
+							$sort: { _id: 1 }
+						}, {
+							$project: {
+								_id: 0,
+								count: "$_id",
+								createdLessons: 1
+							}
+						}
+					]).toArray(),
+
+					lessonCollection.countDocuments({ userId: id }),
+					lessonCollection.countDocuments({ savedLesson: id }),
+					lessonCollection.aggregate([
+						{ $match: { userId: id } },
+						{ $sort: { createdTime: -1 } },
+						{ $limit: 5 }
+					]).toArray(),
+					lessonCollection.aggregate([
+						{
+							$match: { userId: id }
+						},
+						{
+							$unwind: "$likes"
+						},
+						{
+							$count: "totalLikes"
+						}
+					]).toArray(),
+					lessonCollection.aggregate([
+						{
+							$group: {
+								_id: "$userId",
+								userName: { $first: "$userName" },
+								lessonCount: { $sum: 1 }
+							}
+						},
+						{
+							$sort: { lessonCount: -1 }
+						},
+						{
+							$limit: 5
+						}
+					]).toArray()
+				])
+
+				res.send({
+					Average,
+					totalLessonCreated,
+					TotalSavedLesson,
+					RecentlyAddedLesson,
+					PublicLike,
+					topContributors
+				});
+
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
+
+
+
+
+
+
+
+
 
 
 
