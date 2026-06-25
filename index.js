@@ -31,7 +31,7 @@ async function run() {
 		const db = client.db('jobportal');
 		const usersCollection = db.collection('user');
 		const subscriptionCollection = db.collection('subscription');
-		const addLessonCollection = db.collection('add_lesson');
+		const lessonCollection = db.collection('add_lesson');
 		const reportCollection = db.collection('report');
 
 
@@ -79,8 +79,8 @@ async function run() {
 
 		// Admin get data for user  get Operation  (Manage User)
 		app.get('/api/public/lesson', async (req, res) => {
-			try { 
-				const data = await addLessonCollection.find({ status: 'approved', privacy: 'public', anyoneCanSee: true }).toArray()
+			try {
+				const data = await lessonCollection.find({ status: 'approved', privacy: 'public', anyoneCanSee: true }).toArray()
 				res.send(data);
 
 			} catch (error) {
@@ -88,6 +88,19 @@ async function run() {
 				return res.status(500).send({ error: "Server error" });
 			}
 		})
+
+		// Admin get data for user  get Operation  (Manage User)
+		app.get('/api/public/lesson/full', async (req, res) => {
+			try {
+				const data = await lessonCollection.find({}).toArray()
+				res.send(data);
+
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+
 
 		// Like Increment Decrement 👍
 		app.patch('/api/like/increment-decrement', async (req, res) => {
@@ -97,15 +110,15 @@ async function run() {
 					return res.send({ error: "Invalid request, You are trying without login" });
 				}
 				const id = new ObjectId(lessonId);
-				const lesson = await addLessonCollection.findOne({ _id: id })
+				const lesson = await lessonCollection.findOne({ _id: id })
 				if (!lesson) {
 					return res.send('Data not exist.')
 				}
 				if (isLike) {
-					const result = await addLessonCollection.updateOne({ _id: id }, { $addToSet: { likes: likerId }, $inc: { likeCount: 1 } })
+					const result = await lessonCollection.updateOne({ _id: id }, { $addToSet: { likes: likerId }, $inc: { likeCount: 1 } })
 					res.send(result)
 				} else {
-					const result = await addLessonCollection.updateOne({ _id: id }, { $pull: { likes: likerId }, $inc: { likeCount: -1 } });
+					const result = await lessonCollection.updateOne({ _id: id }, { $pull: { likes: likerId }, $inc: { likeCount: -1 } });
 					res.send(result)
 				}
 				res.send('No action found')
@@ -124,15 +137,15 @@ async function run() {
 					return res.send({ error: "Invalid request, You are trying without login" });
 				}
 				const id = new ObjectId(lessonId);
-				const lesson = await addLessonCollection.findOne({ _id: id })
+				const lesson = await lessonCollection.findOne({ _id: id })
 				if (!lesson) {
 					return res.send('Data not exist.')
 				}
 				if (isSaved) {
-					const result = await addLessonCollection.updateOne({ _id: id }, { $addToSet: { savedLesson: saverId }, $inc: { savedCount: 1 } })
+					const result = await lessonCollection.updateOne({ _id: id }, { $addToSet: { savedLesson: saverId }, $inc: { savedCount: 1 } })
 					res.send(result)
 				} else {
-					const result = await addLessonCollection.updateOne({ _id: id }, { $pull: { savedLesson: saverId }, $inc: { savedCount: -1 } });
+					const result = await lessonCollection.updateOne({ _id: id }, { $pull: { savedLesson: saverId }, $inc: { savedCount: -1 } });
 					res.send(result)
 				}
 				res.send('No action found')
@@ -147,17 +160,18 @@ async function run() {
 		app.post('/api/report/post', async (req, res) => {
 			try {
 				const { reporterId, reporterEmail, lessonId, reportImage, reportDetails, reportReason } = req.body
-
+				const report = req.body;
+				report.reportCreatingTime = new Date();
 				const user = await usersCollection.findOne({ _id: new ObjectId(reporterId) })
-				const lessonCollection = await addLessonCollection.findOne({ _id: new ObjectId(lessonId) })
+				const lessonAll = await lessonCollection.findOne({ _id: new ObjectId(lessonId) })
 				if (!user) {
 					return res.status(403).send({ error: "Unauthorized status code" })
 				}
-				if (!lessonCollection) {
+				if (!lessonAll) {
 					return res.status(403).send({ error: "Unauthorized status code" })
 				}
 
-				const data = await reportCollection.insertOne(req.body);
+				const data = await reportCollection.insertOne(report);
 				res.send(data)
 			} catch (error) {
 				console.error(error);
@@ -192,10 +206,7 @@ async function run() {
 					return res.send("UnAuthorize access")
 				}
 
-
-
-
-				const data = await addLessonCollection.findOne({ _id: new ObjectId(id) })
+				const data = await lessonCollection.findOne({ _id: new ObjectId(id) })
 				res.send(data);
 
 			} catch (error) {
@@ -295,7 +306,7 @@ async function run() {
 		// Admin Crud Operation for user data UPDATE Operation plan (Manage Lesson)
 		app.get('/api/admin/dashboard/get-lesson', async (req, res) => {
 			try {
-				const userData = await addLessonCollection.find({}).toArray();
+				const userData = await lessonCollection.find({}).toArray();
 				res.send(userData)
 			} catch (error) {
 				console.error(error);
@@ -311,7 +322,7 @@ async function run() {
 				if (role === 'user') {
 					return res.send('You are Normal User')
 				}
-				const userData = await addLessonCollection.deleteOne({ _id: new ObjectId(id) });
+				const userData = await lessonCollection.deleteOne({ _id: new ObjectId(id) });
 				res.send(userData)
 			} catch (error) {
 				console.error(error);
@@ -326,7 +337,7 @@ async function run() {
 				const statusValue = req.body.anyoneCanSee;
 				console.log(typeof statusValue);
 
-				const userData = await addLessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { anyoneCanSee: statusValue } });
+				const userData = await lessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { anyoneCanSee: statusValue } });
 				res.send(userData)
 			} catch (error) {
 				console.error(error);
@@ -340,7 +351,7 @@ async function run() {
 				const statusValue = req.body.status;
 				console.log(typeof statusValue);
 
-				const userData = await addLessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: statusValue } });
+				const userData = await lessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: statusValue } });
 				res.send(userData)
 			} catch (error) {
 				console.error(error);
@@ -355,7 +366,7 @@ async function run() {
 				const isView = req.body.isViewAdmin;
 				console.log(typeof isView);
 
-				const userData = await addLessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { isViewAdmin: isView } });
+				const userData = await lessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: { isViewAdmin: isView } });
 				res.send(userData)
 			} catch (error) {
 				console.error(error);
@@ -371,7 +382,6 @@ async function run() {
 				if (userSession?.user?.role !== 'admin') {
 					return res.status(403).send({ error: "Unauthorized status code" })
 				}
-				// const { lessonId } = req.query;
 				const data = await reportCollection.aggregate([
 					{
 						$group: {
@@ -417,7 +427,7 @@ async function run() {
 					return res.send('You are Normal User')
 				}
 				const reportDelete = await reportCollection.deleteMany({ lessonId: id });
-				const lessonDelete = await addLessonCollection.deleteOne({ _id: new ObjectId(id) })
+				const lessonDelete = await lessonCollection.deleteOne({ _id: new ObjectId(id) })
 				res.send({ reportDelete, lessonDelete })
 			} catch (error) {
 				console.error(error);
@@ -442,6 +452,131 @@ async function run() {
 		})
 
 
+		// Total user, Total Public lesson, Total Report, Today new lesson
+		app.get('/api/admin/dashboard/user-activity', async (req, res) => {
+			try {
+				// const session = req.headers["session"];
+				// const userSession = JSON.parse(session)
+				// if (userSession?.user?.role !== 'admin') {
+				// 	return res.status(403).send({ error: "Unauthorized status code" })
+				// }
+
+
+				const startOfToday = new Date();
+				startOfToday.setHours(0, 0, 0, 0);
+				const [
+					totalUsers,
+					publicLessons,
+					newLessonsToday,
+					reportedLessons,
+					topContributors,
+					lessonGrowth,
+					userGrowth
+				] = await Promise.all([
+					usersCollection.countDocuments(),
+
+					lessonCollection.countDocuments({
+						$and: [
+							{ anyoneCanSee: true },
+							{ privacy: "public" }
+						]
+					}),
+					lessonCollection.countDocuments({
+						createdTime: {
+							$gte: startOfToday
+						}
+					}),
+					reportCollection.countDocuments({}),
+					lessonCollection.aggregate([
+						{
+							$group: {
+								_id: "$userId",
+								userName: { $first: "$userName" },
+								lessonCount: { $sum: 1 }
+							}
+						},
+						{
+							$sort: { lessonCount: -1 }
+						},
+						{
+							$limit: 5
+						}
+					]).toArray(),
+					lessonCollection.aggregate([
+						{
+							$match: {
+								createdTime: {
+									$gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+								}
+							}
+						},
+						{
+							$group: {
+								_id: {
+									$dateToString: {
+										format: "%Y-%m-%d",
+										date: "$createdTime"
+									}
+								},
+								count: {
+									$sum: 1
+								}
+							}
+						},
+						{
+							$sort: {
+								_id: 1
+							}
+						},
+						{
+							$project: {
+								_id: 0,
+								date: "$_id",
+								count: 1
+							}
+						}
+					]).toArray(),
+					usersCollection.aggregate([
+						{
+							$match: {
+								createdAt: {
+									$gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+								}
+							}
+						},
+						{
+							$group: {
+								_id: {
+									$dateToString: {
+										format: "%Y-%m-%d",
+										date: "$createdAt"
+									}
+								},
+								count: {
+									$sum: 1
+								}
+							}
+						},
+						{
+							$sort: {
+								_id: 1
+							}
+						},
+						{
+							$project: {
+								_id: 0,
+								date: "$_id",
+								count: 1
+							}
+						}
+					]).toArray()
+				]);
+				res.send({ totalUsers, publicLessons, newLessonsToday, reportedLessons, topContributors, lessonGrowth, userGrowth })
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
 
 
 
@@ -474,7 +609,7 @@ async function run() {
 				if (!user) {
 					return res.status(403).send({ error: "Unauthorized status code" })
 				}
-				const lesson = await addLessonCollection.insertOne(data)
+				const lesson = await lessonCollection.insertOne(data)
 				res.send(lesson)
 			} catch (error) {
 				console.error(error);
@@ -494,7 +629,7 @@ async function run() {
 					return res.status(403).send({ error: "Unauthorized status code" })
 				}
 
-				const lessons = await addLessonCollection
+				const lessons = await lessonCollection
 					.find({ userId: id })
 					.toArray();
 
@@ -510,7 +645,7 @@ async function run() {
 			try {
 				const id = req.params.id;
 				const bodyData = req.body;
-				const isMatchLessonId = await addLessonCollection.findOne({ _id: new ObjectId(id) })
+				const isMatchLessonId = await lessonCollection.findOne({ _id: new ObjectId(id) })
 				if (!isMatchLessonId) {
 					res.status(403).send({ error: "Something wrong with your Data!" })
 				}
@@ -518,7 +653,7 @@ async function run() {
 				if (isMatchUserId) {
 					console.log('User true');
 				}
-				const data = await addLessonCollection.deleteOne({ _id: new ObjectId(id) })
+				const data = await lessonCollection.deleteOne({ _id: new ObjectId(id) })
 				res.send(data)
 			} catch (error) {
 				console.error(error);
@@ -531,7 +666,8 @@ async function run() {
 			try {
 				const id = req.params.id;
 				const bodyData = req.body;
-				const isMatchLessonId = await addLessonCollection.findOne({ _id: new ObjectId(id) })
+				bodyData.LessonUpdatedTime = new Date();
+				const isMatchLessonId = await lessonCollection.findOne({ _id: new ObjectId(id) })
 				if (!isMatchLessonId) {
 					res.status(403).send({ error: "Something wrong with your Data!" })
 				}
@@ -540,7 +676,7 @@ async function run() {
 					console.log('User true');
 				}
 
-				const data = await addLessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: bodyData })
+				const data = await lessonCollection.updateOne({ _id: new ObjectId(id) }, { $set: bodyData })
 				res.send(data)
 
 
@@ -554,21 +690,11 @@ async function run() {
 		app.get('/api/user/dashboard/my-favorite-lesson/:id', async (req, res) => {
 			try {
 				const { id } = req.params;
-				const data = await addLessonCollection.find({
+				const data = await lessonCollection.find({
 					savedLesson: id
 				}).toArray()
 				console.log(data);
 				res.send(data)
-				
-				// if (!data) {
-				// 	return res.status(403).send({ error: "Unauthorized status code" })
-				// }
-
-				// const lessons = await addLessonCollection
-				// 	.find({ userId: id })
-				// 	.toArray();
-
-				// res.send(lessons)
 			} catch (error) {
 				console.error(error);
 				return res.status(500).send({ error: "Server error" });
