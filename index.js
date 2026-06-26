@@ -23,8 +23,30 @@ const client = new MongoClient(MONGODB_URI, {
 });
 
 const JWKS = createRemoteJWKSet(
-	new URL(`http://localhost:3000/api/auth/jwks`)
+	new URL(`https://reflectify-client.vercel.app/api/auth/jwks`)
 )
+const verifyAdmin = async (req, res, next) => {
+
+	const userToken = req?.headers?.token;
+	if (!userToken) {
+		return res.status(401).send({ error: "Unauthorized status code" });
+	}
+	const token = userToken.split(" ")[1];
+	if (!token) {
+		return res.status(401).send({ error: "Unauthorized status code" });
+	}
+	try {
+		const { payload } = await jwtVerify(token, JWKS)
+		if (payload.role !== 'admin') {
+			return res.status(403).send({ error: "Unauthorized status code" });
+		}
+		next()
+	} catch (error) {
+		console.log(error);
+		res.send({ error: "Unauthorized status code" })
+	}
+}
+
 const verifyUser = async (req, res, next) => {
 
 	const userToken = req?.headers?.token;
@@ -35,16 +57,44 @@ const verifyUser = async (req, res, next) => {
 	if (!token) {
 		return res.status(401).send({ error: "Unauthorized status code" });
 	}
-	console.log(userToken, token);
 	try {
-		const { payload } = await jwtVerify(token, JWKS) 
-		console.log(payload.role); //This is true
+		const { payload } = await jwtVerify(token, JWKS)
+		if (payload.role !== 'user') {
+			return res.status(403).send({ error: "Unauthorized status code" });
+		}
 		next()
-		
 	} catch (error) {
 		console.log(error);
-		res.send({ error: "Unauthorized status code" })	
+		res.send({ error: "Unauthorized status code" })
 	}
+}
+const VerifyToken = async (req, res, next) => {
+
+	const userToken = req?.headers?.token;
+	if (!userToken) {
+		return res.status(401).send({ error: "Unauthorized status code" });
+	}
+	const token = userToken.split(" ")[1];
+	if (!token) {
+		return res.status(401).send({ error: "Unauthorized status code" });
+	}
+	try {
+		const { payload } = await jwtVerify(token, JWKS)
+		next()
+	} catch (error) {
+		console.log(error);
+		res.send({ error: "Unauthorized status code" })
+	}
+}
+
+
+
+const Token = async (req, res, next) => {
+	const userToken = req?.headers?.token;
+	console.log(userToken, "Previous Token of usr");
+	const token = userToken.split(" ")[1];
+	console.log(userToken, 'User Token is This one');
+	next()
 }
 
 
@@ -174,7 +224,7 @@ async function run() {
 
 
 		// Like Increment Decrement 👍
-		app.patch('/api/like/increment-decrement', async (req, res) => {
+		app.patch('/api/like/increment-decrement', VerifyToken, async (req, res) => {
 			try {
 				const { isLike, lessonId, likerId } = req.body;
 				if (!lessonId || !likerId) {
@@ -187,12 +237,12 @@ async function run() {
 				}
 				if (isLike) {
 					const result = await lessonCollection.updateOne({ _id: id }, { $addToSet: { likes: likerId }, $inc: { likeCount: 1 } })
-					res.send(result)
+					return res.send(result)
 				} else {
 					const result = await lessonCollection.updateOne({ _id: id }, { $pull: { likes: likerId }, $inc: { likeCount: -1 } });
-					res.send(result)
+					return res.send(result)
 				}
-				res.send('No action found')
+				return res.send('No action found')
 
 			} catch (error) {
 				console.error(error);
@@ -201,7 +251,7 @@ async function run() {
 		})
 
 		// Saved Increment Decrement 🔖
-		app.patch('/api/like/saved-unsaved', async (req, res) => {
+		app.patch('/api/like/saved-unsaved', VerifyToken, async (req, res) => {
 			try {
 				const { isSaved, lessonId, saverId } = req.body;
 				if (!lessonId || !saverId) {
@@ -214,12 +264,12 @@ async function run() {
 				}
 				if (isSaved) {
 					const result = await lessonCollection.updateOne({ _id: id }, { $addToSet: { savedLesson: saverId }, $inc: { savedCount: 1 } })
-					res.send(result)
+					return res.send(result)
 				} else {
 					const result = await lessonCollection.updateOne({ _id: id }, { $pull: { savedLesson: saverId }, $inc: { savedCount: -1 } });
-					res.send(result)
+					return res.send(result)
 				}
-				res.send('No action found')
+				return res.send('No action found')
 
 			} catch (error) {
 				console.error(error);
@@ -267,10 +317,10 @@ async function run() {
 		// LessonDetails : Dynamic Page [id]
 
 		// Lesson Details Page Api 
-		app.get('/api/lesson/details/:id', async (req, res) => {
+		app.get('/api/lesson/details/:id', VerifyToken, async (req, res) => {
 			try {
 				const id = req.params.id;
-				const BrowserData = req.headers["session"]
+				const BrowserData = req.headers["sessions"]
 				const session = JSON.parse(BrowserData)
 				if (!session?.user) {
 					return res.send("UnAuthorize access")
@@ -297,10 +347,12 @@ async function run() {
 
 
 
+
+
 		// Admin
 
 		// Admin get data for user  get Operation  (Manage User)
-		app.get('/api/admin/dashboard/get-user/:id', async (req, res) => {
+		app.get('/api/admin/dashboard/get-user/:id', verifyAdmin, async (req, res) => {
 			try {
 				const id = req.params.id;
 				const user = await usersCollection.findOne({
@@ -319,7 +371,7 @@ async function run() {
 		})
 
 		// Admin Crud Operation for user data DELETE Operation (Manage User)
-		app.delete('/api/admin/dashboard/delete-user/:id', async (req, res) => {
+		app.delete('/api/admin/dashboard/delete-user/:id', verifyAdmin, async (req, res) => {
 			try {
 				const id = req.params.id;
 
@@ -333,7 +385,7 @@ async function run() {
 		})
 
 		// Admin Crud Operation for user data UPDATE Operation role (Manage User)
-		app.patch('/api/admin/dashboard/update-user-role/:id', async (req, res) => {
+		app.patch('/api/admin/dashboard/update-user-role/:id', verifyAdmin, async (req, res) => {
 			try {
 				const id = req.params.id;
 				const bodyData = req.body.role;
@@ -353,7 +405,7 @@ async function run() {
 		})
 
 		// Admin Crud Operation for user data UPDATE Operation plan (Manage User)
-		app.patch('/api/admin/dashboard/update-user-plan/:id', async (req, res) => {
+		app.patch('/api/admin/dashboard/update-user-plan/:id', verifyAdmin, async (req, res) => {
 			try {
 				const id = req.params.id;
 				const bodyData = req.body.plan;
@@ -373,7 +425,7 @@ async function run() {
 		})
 
 		// Admin Crud Operation for user data UPDATE Operation plan (Manage Lesson)
-		app.get('/api/admin/dashboard/get-lesson', async (req, res) => {
+		app.get('/api/admin/dashboard/get-lesson', verifyAdmin, async (req, res) => {
 			try {
 				const userData = await lessonCollection.find({}).toArray();
 				res.send(userData)
@@ -384,7 +436,7 @@ async function run() {
 		})
 
 		// Admin Crud Operation for user data DELETE Operation plan (Manage Lesson)
-		app.delete('/api/admin/dashboard/delete-lesson/:id', async (req, res) => {
+		app.delete('/api/admin/dashboard/delete-lesson/:id', verifyAdmin, async (req, res) => {
 			try {
 				const id = req.params.id;
 				const role = req.body.role;
@@ -400,7 +452,7 @@ async function run() {
 		})
 
 		// Admin Crud Operation for user data UPDATE Operation plan (Manage Lesson) (Privacy update, post can public or private by admin)
-		app.patch('/api/admin/dashboard/status-public-or-private-lesson/:id', async (req, res) => {
+		app.patch('/api/admin/dashboard/status-public-or-private-lesson/:id', verifyAdmin, async (req, res) => {
 			try {
 				const id = req.params.id;
 				const statusValue = req.body.anyoneCanSee;
@@ -427,7 +479,7 @@ async function run() {
 		})
 
 		// Admin Crud Operation for user data UPDATE Operation plan (Manage Lesson) (admin view or not)
-		app.patch('/api/admin/dashboard/admin-view/:id', async (req, res) => {
+		app.patch('/api/admin/dashboard/admin-view/:id', verifyAdmin, async (req, res) => {
 			try {
 				const id = req.params.id;
 				const isView = req.body.isViewAdmin;
@@ -441,13 +493,9 @@ async function run() {
 		})
 
 		// Get Report For admin ®️
-		app.get('/api/admin/dashboard/get-report', async (req, res) => {
+		app.get('/api/admin/dashboard/get-report', verifyAdmin, async (req, res) => {
 			try {
-				const session = req.headers["session"];
-				const userSession = JSON.parse(session)
-				if (userSession?.user?.role !== 'admin') {
-					return res.status(403).send({ error: "Unauthorized status code" })
-				}
+
 				const data = await reportCollection.aggregate([
 					{
 						$group: {
@@ -473,7 +521,7 @@ async function run() {
 		})
 
 		// Get Report details For admin 
-		app.get('/api/get-all-report-by-lesson-id/:id', async (req, res) => {
+		app.get('/api/get-all-report-by-lesson-id/:id', verifyAdmin, async (req, res) => {
 			try {
 				const { id } = req.params;
 				const data = await reportCollection.find({ lessonId: id }).toArray()
@@ -485,13 +533,9 @@ async function run() {
 		})
 
 		// Report and lesson both delete. (Manage Lesson)
-		app.delete('/api/delete-full-report/:id', async (req, res) => {
+		app.delete('/api/delete-full-report/:id', verifyAdmin, async (req, res) => {
 			try {
 				const { id } = req.params;
-				const role = req.body.role;
-				if (role !== 'admin') {
-					return res.send('You are Normal User')
-				}
 				const reportDelete = await reportCollection.deleteMany({ lessonId: id });
 				const lessonDelete = await lessonCollection.deleteOne({ _id: new ObjectId(id) })
 				res.send({ reportDelete, lessonDelete })
@@ -502,13 +546,10 @@ async function run() {
 		})
 
 		// Only Report delete. (Manage Lesson)
-		app.delete('/api/delete-report-only/:id', async (req, res) => {
+		app.delete('/api/delete-report-only/:id', verifyAdmin, async (req, res) => {
 			try {
 				const { id } = req.params;
-				const role = req.body.role;
-				if (role !== 'admin') {
-					return res.send('You are Normal User')
-				}
+				console.log(id, 'the id is');
 				const reportDelete = await reportCollection.deleteMany({ lessonId: id });
 				res.send(reportDelete)
 			} catch (error) {
@@ -519,17 +560,13 @@ async function run() {
 
 
 		// Total user, Total Public lesson, Total Report, Today new lesson
-		app.get('/api/admin/dashboard/user-activity', verifyUser, async (req, res) => {
+		app.get('/api/admin/dashboard/user-activity', verifyAdmin, async (req, res) => {
 			try {
 				const session = req.headers.sessions;
 				const userSession = JSON.parse(session)
-
-
-
 				if (userSession?.user?.role !== 'admin') {
 					return res.status(403).send({ error: "Unauthorized status code" })
 				}
-
 				const startOfToday = new Date();
 				startOfToday.setHours(0, 0, 0, 0);
 				const [
@@ -667,7 +704,7 @@ async function run() {
 		// user
 
 		// User Add Lessons route api
-		app.post('/api/user/dashboard/add-lesson/:id', async (req, res) => {
+		app.post('/api/user/dashboard/add-lesson/:id', verifyUser, async (req, res) => {
 			try {
 				const id = req.params.id;
 				const data = req.body
@@ -686,7 +723,7 @@ async function run() {
 		})
 
 		// User Fetch Lessons route api
-		app.get('/api/user/dashboard/my-lessons/:id', async (req, res) => {
+		app.get('/api/user/dashboard/my-lessons/:id', verifyUser, async (req, res) => {
 			try {
 				const id = req.params.id;
 				const user = await usersCollection.findOne({
@@ -709,7 +746,7 @@ async function run() {
 		})
 
 		// User Fetch Lesson Delete api
-		app.delete('/api/user/dashboard/delete-lesson/:id', async (req, res) => {
+		app.delete('/api/user/dashboard/delete-lesson/:id', verifyUser, async (req, res) => {
 			try {
 				const id = req.params.id;
 				const bodyData = req.body;
@@ -727,7 +764,7 @@ async function run() {
 		})
 
 		// User Fetch Lesson Update api
-		app.patch('/api/user/dashboard/update-lesson/:id', async (req, res) => {
+		app.patch('/api/user/dashboard/update-lesson/:id', verifyUser, async (req, res) => {
 			try {
 				const id = req.params.id;
 				const bodyData = req.body;
@@ -748,7 +785,7 @@ async function run() {
 		})
 
 		// My Favorite lesson for show
-		app.get('/api/user/dashboard/my-favorite-lesson/:id', async (req, res) => {
+		app.get('/api/user/dashboard/my-favorite-lesson/:id', verifyUser, async (req, res) => {
 			try {
 				const { id } = req.params;
 				const data = await lessonCollection.find({
@@ -762,7 +799,7 @@ async function run() {
 		})
 
 		// Dashboard All summary api
-		app.get('/api/user/dashboard/all-summary/:id', async (req, res) => {
+		app.get('/api/user/dashboard/all-summary/:id', verifyUser, async (req, res) => {
 			try {
 				const { id } = req.params;
 				const user = await usersCollection.findOne({ _id: new ObjectId(id) })
