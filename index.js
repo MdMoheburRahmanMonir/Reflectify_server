@@ -110,6 +110,7 @@ async function run() {
 		const subscriptionCollection = db.collection('subscription');
 		const lessonCollection = db.collection('add_lesson');
 		const reportCollection = db.collection('report');
+		const commentCollection = db.collection('comment');
 
 
 		// Other Collection Data for showing purpose 
@@ -157,7 +158,6 @@ async function run() {
 		// Admin get data for user  get Operation  (Manage User)
 		app.get('/api/public/lesson', async (req, res) => {
 			try {
-
 				const [
 					featuredLessonsSeed,
 					MostSaveLesson,
@@ -193,12 +193,12 @@ async function run() {
 							$sort: { lessonCount: -1 }
 						},
 						{
-							$limit: 5
+							$limit: 7
 						}
 					]).toArray(),
 				])
 
-				res.send({
+				return res.send({
 					featuredLessonsSeed,
 					MostSaveLesson,
 					TopContributors
@@ -224,7 +224,7 @@ async function run() {
 
 
 		// Like Increment Decrement 👍
-		app.patch('/api/like/increment-decrement', VerifyToken, async (req, res) => {
+		app.patch('/api/like/increment-decrement', async (req, res) => {
 			try {
 				const { isLike, lessonId, likerId } = req.body;
 				if (!lessonId || !likerId) {
@@ -251,7 +251,7 @@ async function run() {
 		})
 
 		// Saved Increment Decrement 🔖
-		app.patch('/api/like/saved-unsaved', VerifyToken, async (req, res) => {
+		app.patch('/api/like/saved-unsaved', async (req, res) => {
 			try {
 				const { isSaved, lessonId, saverId } = req.body;
 				if (!lessonId || !saverId) {
@@ -321,13 +321,16 @@ async function run() {
 			try {
 				const id = req.params.id;
 				const BrowserData = req.headers["sessions"]
-				const session = JSON.parse(BrowserData)
-				if (!session?.user) {
-					return res.send("UnAuthorize access")
-				}
 
-				const data = await lessonCollection.findOne({ _id: new ObjectId(id) })
-				res.send(data);
+				const [
+					lessonData,
+					commentData
+				] = await Promise.all([
+					lessonCollection.findOne({ _id: new ObjectId(id) }),
+					commentCollection.find({ lessonId: id }).sort({ commentTime: -1 }).toArray()
+				])
+
+				res.send({ lessonData, commentData });
 
 			} catch (error) {
 				console.error(error);
@@ -888,8 +891,19 @@ async function run() {
 			}
 		})
 
+		// User Add Lessons route api
+		app.post('/api/user/comment/post', VerifyToken, async (req, res) => {
+			try {
+				const data = req.body
+				console.log(data);
 
-
+				const commentPost = await commentCollection.insertOne(data)
+				res.send(commentPost)
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
 
 
 
