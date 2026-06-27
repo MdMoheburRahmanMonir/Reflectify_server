@@ -23,7 +23,7 @@ const client = new MongoClient(MONGODB_URI, {
 });
 
 const JWKS = createRemoteJWKSet(
-	new URL(`https://reflectify-client.vercel.app/api/auth/jwks`)
+	new URL(`http://localhost:3000/api/auth/jwks`)
 )
 const verifyAdmin = async (req, res, next) => {
 
@@ -905,11 +905,79 @@ async function run() {
 			}
 		})
 
+		// Dashboard All summary api
+		app.get('/api/my-data-for-profile/:id', VerifyToken, async (req, res) => {
+			try {
+				const { id } = req.params;
+				const user = await usersCollection.findOne({ _id: new ObjectId(id) })
+				const startOfToday = new Date();
+				const [
+					publicData,
+					publicSession
+				] = await Promise.all([
+					lessonCollection.aggregate([
+						{
+							$match: {
+								userId: id,
+								privacy: 'public'
+							}
+						},
+						{
+							$project: {
+								_id: 1,
+								title: 1,
+								description: 1,
+								category: 1,
+								accessLevel: 1,
+								date: "$createdTime",
+								likes: "$likeCount",
+								lessonPhoto: 1
+							}
+						},
+						{
+							$limit: 6
+						}
+					]).toArray(),
+					usersCollection.find({ _id: new ObjectId(id) }).toArray(),
+				])
 
+				res.send({
+					publicData, publicSession
+				});
 
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
 
+		// Profile CoverPhoto Upload.
+		app.patch('/api/profile-cover-image-upload/:id', async (req, res) => {
+			try {
+				const { id } = req.params;
+				const { coverImage } = req.body;
+				console.log(coverImage, 'The cover Image is');
 
-
+				const upload = await usersCollection.updateOne({ _id: new ObjectId(id) }, { $set: { coverImage: coverImage } })
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
+ 
+		app.get('/api/get-user-cover/:id', async (req, res) => {
+			try {
+				const { id } = req.params;
+				const user = await usersCollection.findOne(
+					{ _id: new ObjectId(id) },
+					{ projection: { coverImage: 1 } }  
+				);
+				return res.send({ coverImage: user?.coverImage || '' });
+			} catch (error) {
+				console.error(error);
+				return res.status(500).send({ error: "Server error" });
+			}
+		})
 
 
 
