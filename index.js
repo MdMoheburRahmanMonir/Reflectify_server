@@ -23,7 +23,7 @@ const client = new MongoClient(MONGODB_URI, {
 });
 
 const JWKS = createRemoteJWKSet(
-	new URL(`http://localhost:3000/api/auth/jwks`)
+	new URL(`https://reflectify-client.vercel.app/api/auth/jwks`)
 )
 const verifyAdmin = async (req, res, next) => {
 
